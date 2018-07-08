@@ -1,0 +1,54 @@
+version: '3.6'
+
+services:
+
+  consul-agent-1: &consul-agent
+    image: consul:1.2.0
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 50M
+      restart_policy:
+        condition: on-failure
+    command: "agent -retry-join consul-server-bootstrap -disable-host-node-id -dev -bind='{{ GetInterfaceIP \"eth0\" }}'"
+
+    # consul-agent-2:
+    # <<: *consul-agent
+
+  consul-server-1: &consul-server
+    <<: *consul-agent
+    command: "agent -server -retry-join consul-server-bootstrap -disable-host-node-id -dev -bind='{{ GetInterfaceIP \"eth0\" }}'"
+
+    #  consul-server-2:
+    #<<: *consul-server
+
+    #consul-server-3:
+          #  <<: *consul-server
+
+  consul-server-bootstrap:
+    <<: *consul-agent
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 50M
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.port=8500
+        - traefik.frontend.rule=Host:consul.services.alin.be
+        - traefik.frontend.entryPoints=http,https
+        - traefik.backend.loadbalancer.method=wrr
+        - traefik.docker.network=traefik-net
+    ports:
+      - "8400:8400"
+      - "8600:8600"
+    command: "agent -server -bootstrap-expect 3 -ui -client 0.0.0.0 --disable-host-node-id -bind='{{ GetInterfaceIP \"eth2\" }}'"
+
+networks:
+  default:
+    external:
+      name: traefik-net
